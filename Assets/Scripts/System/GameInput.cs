@@ -23,20 +23,32 @@ public struct InputData
 public class GameInput : MonoBehaviour
 {
     private PlayerMovement pm = null;
+    private PlayerGun pg = null;
 
     private InputData moveLeft;
     private InputData moveRIght;
     private InputData jump;
+    private InputData descend;
+
+    private InputData primary;
+    private InputData secondary;
+    private InputData reload;
 
     // 초기화, 플레이어의 컴포넌트들을 받아오고, 키 입력 정보 업데이트.
     private void Awake()
     {
-        pm = GameObject.FindGameObjectWithTag("Player").GetComponent<PlayerMovement>();
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        pm = player.GetComponent<PlayerMovement>();
+        pg = player.GetComponent<PlayerGun>();
 
-        // 각 키의 입력 코드 지정
+        // 각 키의 입력 코드 지정 (기본값)
         moveLeft = new InputData(false, KeyCode.A);
         moveRIght = new InputData(false, KeyCode.D);
         jump = new InputData(false, KeyCode.Space);
+        descend = new InputData(false, KeyCode.S);
+
+        primary = new InputData(true, 0);
+        reload = new InputData(false, KeyCode.R);
     }
 
     private void Update()
@@ -44,6 +56,10 @@ public class GameInput : MonoBehaviour
         pm.SetMove(false, GetInput(moveLeft));
         pm.SetMove(true, GetInput(moveRIght));
         pm.Jump(GetInput(jump));
+        if (GetInput(descend)) pm.DescendPlatform();
+
+        if (GetInput(primary)) pg.Fire();
+        if (GetInputDown(reload)) pg.Reload();
     }
     private bool GetInputDown(InputData d)
     {
