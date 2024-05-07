@@ -31,10 +31,10 @@ public class PlayerMovement : MonoBehaviour
     private bool canBonusJump = false;                      // 추가 점프가 가능한지 여부
 
     [Header("플랫폼 하강")]
-    [SerializeField] private float descendTime = 0.15f;
-    private float descendTimeCurr = 0.0f;
-    readonly private int playerLayer = 3;
-    readonly private int platformLayer = 7;
+    [SerializeField] private LayerMask platformLayerMask = default;
+    private bool isDescending = false;
+    [SerializeField] private int playerLayer = 3;
+    [SerializeField] private int platformLayer = 7;
 
     [Header("바닥 판정")]
     [SerializeField] private LayerMask groundLayer = default;   // 바닥으로 판정할 레이어
@@ -46,6 +46,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("벽판정")]
     [SerializeField] private LayerMask wallLayer = default;   // 벽으로 판정할 레이어
     [SerializeField] private Vector2 wallBox = Vector2.zero;  // 벽 판정 박스
+    [SerializeField] private float wallBoxYOffset = 0f;     // 벽 판정 박스 오프셋
 
     // 룸 트랜지션
     private bool lockBonusJump = false;             // 추가 점프 일시 정지
@@ -62,7 +63,8 @@ public class PlayerMovement : MonoBehaviour
 
         // 벽 판정 상자
         Gizmos.color = new Color(1, 0, 1, 0.5f);
-        center.y -= groundBoxYOffset;
+        center = transform.position;
+        center.y += wallBoxYOffset;
         Gizmos.DrawCube(center, wallBox);
     }
 #endif
@@ -77,9 +79,11 @@ public class PlayerMovement : MonoBehaviour
     private void Update()
     {
         float deltaTime = Time.deltaTime;
+        Vector2 groundBoxCenter = transform.position;
+        groundBoxCenter.y += groundBoxYOffset;
 
-        UpdateGrounded(deltaTime);
-        UpdateDescendPlatform(deltaTime);
+        UpdateGrounded(deltaTime, groundBoxCenter);
+        UpdateDescendPlatform(groundBoxCenter);
         UpdateHSpeed(deltaTime);
         JumpGravity();
     }
@@ -87,13 +91,10 @@ public class PlayerMovement : MonoBehaviour
  #region MOVEMENT UPDATE FUNCTIONS
 
     // 바닥 판정
-    private void UpdateGrounded(float deltaTime)
+    private void UpdateGrounded(float deltaTime, Vector2 groundBoxCenter)
     {
-        Vector2 center = transform.position;
-        center.y += groundBoxYOffset;
-
         // 바닥에 닿지 않았을 떄
-        if (!Physics2D.BoxCast(center, groundBox, 0f, Vector2.down, groundDistanceMax, groundLayer))
+        if (!Physics2D.BoxCast(groundBoxCenter, groundBox, 0f, Vector2.down, groundDistanceMax, groundLayer))
         {
             // 코요테타임
             if (coyoteTimeCurr < coyoteTime)
@@ -101,21 +102,23 @@ public class PlayerMovement : MonoBehaviour
             else
                 isGrounded = false;
         }
-        else
+        else if (rb.velocity.y <= 0)
         {
             isGrounded = true;
-            coyoteTimeCurr = 0f;
+            if (!isDescending)
+                coyoteTimeCurr = 0f;
             bonusJumpCurr = bonusJump;
         }
     }
 
     // 플랫폼 하강 판정
-    private void UpdateDescendPlatform(float deltaTime)
+    private void UpdateDescendPlatform(Vector2 groundBoxCenter)
     {
-        if (descendTimeCurr <= 0f) return;
-        descendTimeCurr -= deltaTime;
-        if (descendTimeCurr <= 0f)
+        if (isDescending && !Physics2D.BoxCast(groundBoxCenter, groundBox, 0f, Vector2.down, groundDistanceMax, platformLayerMask))
+        {
             Physics2D.IgnoreLayerCollision(playerLayer, platformLayer, false);
+            isDescending = false;
+        }
     }
 
     // 수평 속도 조정
@@ -129,7 +132,9 @@ public class PlayerMovement : MonoBehaviour
             hSpeed = Mathf.Max(-moveSpeedMax, hSpeed - speedDelta);
 
         // 벽에 닿으면 속도 0으로 초기화.
-        if (Physics2D.BoxCast(transform.position, wallBox, 0, Vector2.right, hSpeed * deltaTime, wallLayer))
+        Vector2 center = transform.position;
+        center.y += wallBoxYOffset;
+        if (Physics2D.BoxCast(center, wallBox, 0, Vector2.right, hSpeed * deltaTime, wallLayer))
             hSpeed = 0;
 
         // 계산된 속도 적용
@@ -196,7 +201,8 @@ public class PlayerMovement : MonoBehaviour
     {
         if (!isGrounded) return;
         Physics2D.IgnoreLayerCollision(playerLayer, platformLayer, true);
-        descendTimeCurr = descendTime;
+        coyoteTimeCurr = coyoteTime;
+        isDescending = true;
     }
 
     public void SaveVelocity()
